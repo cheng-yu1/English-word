@@ -16,7 +16,7 @@
             -webkit-tap-highlight-color: transparent;
         }
         html {
-            -webkit-text-size-adjust: 100%;  /* 防止手机自动放大字体 */
+            -webkit-text-size-adjust: 100%;
             text-size-adjust: 100%;
         }
         body {
@@ -57,7 +57,6 @@
             color: #2c5f8a;
         }
 
-        /* 浏览器兼容提示卡 */
         .browser-alert {
             display: none;
             background: #fff4e5;
@@ -89,7 +88,6 @@
         .btn-open-browser { background: #ff8c00; color: white; }
         .btn-ignore { background: #f0f0f0; color: #555; }
 
-        /* 语音设置区（解锁 + 选择） */
         .voice-panel {
             margin: 8px 0 4px;
             padding: 12px;
@@ -206,6 +204,23 @@
             font-weight: 600;
             color: #3a5b7a;
             font-size: 0.95rem;
+        }
+
+        /* 真实进度条 */
+        .progress-bar-wrap {
+            width: 100%;
+            height: 8px;
+            background: #e8eef5;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 4px 0 14px;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4a8fd0, #1e6bb8);
+            border-radius: 10px;
+            transition: width 0.4s ease;
+            width: 0%;
         }
 
         .practice-card {
@@ -447,9 +462,21 @@
             gap: 8px;
         }
         .word-item:active { background: #f0f7ff; }
+        .word-item.mastered {
+            background: #f0faf4;
+            border-color: #b8e5c9;
+        }
         .word-item .en { font-weight: 600; color: #1d3e62; flex-shrink: 0; }
         .word-item .zh { color: #4e6b87; font-size: 0.88rem; text-align: right; flex: 1; }
         .word-item .speaker { font-size: 1.1rem; color: #4a8fd0; padding: 4px; }
+        .word-item .mastered-tag {
+            font-size: 0.7rem;
+            background: #2e9e5b;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 4px;
+        }
 
         .import-area {
             margin-top: 14px;
@@ -546,7 +573,6 @@
 <div class="app">
     <h1>📘 单词练习 <span>零基础·阶段1</span></h1>
 
-    <!-- 浏览器兼容提示卡 -->
     <div class="browser-alert" id="browserAlert">
         <div id="browserAlertText"></div>
         <div class="btn-row">
@@ -555,7 +581,6 @@
         </div>
     </div>
 
-    <!-- 语音设置面板（解锁 + 选择音色） -->
     <div class="voice-panel" id="voicePanel">
         <div class="unlock-row" id="voiceUnlockRow">
             <button id="voiceUnlockBtn">🔊 点击开启语音播报</button>
@@ -573,7 +598,12 @@
 
     <div class="subhead">
         <div class="score-box"><i>🏆</i> 得分 <span id="scoreDisplay">0</span></div>
-        <div class="progress-box" id="progressDisplay">进度 0/0</div>
+        <div class="progress-box" id="progressDisplay">已掌握 0/0</div>
+    </div>
+
+    <!-- 真实学习进度条 -->
+    <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="progressBarFill"></div>
     </div>
 
     <div class="practice-card">
@@ -603,6 +633,11 @@
         <button class="btn" id="resetBtn">🔄 重置分数</button>
     </div>
 
+    <!-- 额外操作按钮 -->
+    <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+        <button class="btn" id="resetProgressBtn" style="flex:1; min-width:140px;">♻️ 重置学习进度（重新学）</button>
+    </div>
+
     <div class="panel" id="libraryPanel" style="display: none;">
         <h3>
             📖 全部单词
@@ -625,7 +660,7 @@
                 <button class="btn-import-primary" id="importMergeBtn">➕ 追加导入</button>
                 <button class="btn-import-secondary" id="importReplaceBtn">♻️ 替换全部</button>
             </div>
-            <div class="import-hint">支持逗号、制表符或空格分隔。替换将清空现有词库和错题本。</div>
+            <div class="import-hint">支持逗号、制表符或空格分隔。替换将清空现有词库、错题本和进度。</div>
         </div>
     </div>
 </div>
@@ -741,22 +776,24 @@
         // ==================== 2. 全局状态 ====================
         let allWords = [];
         let wrongWords = [];
+        let masteredWords = [];   // 已掌握单词的英文（小写）
         let score = 0;
         let currentMode = 'zh2en';
         let currentQuestion = null;
         let isReviewingWrong = false;
-        let questionCount = 0;
+        let questionCount = 0;    // 本次会话已答对计数（保留兼容）
         let answered = false;
         let autoNextTimer = null;
         let historyStack = [];
         let voiceSupported = false;
         let voiceUnlocked = false;
-        let availableVoices = [];      // 所有英文语音
-        let selectedVoiceName = '';    // 用户选择的语音名称
+        let availableVoices = [];
+        let selectedVoiceName = '';
 
         // ==================== 3. DOM 引用 ====================
         const scoreDisplay = document.getElementById('scoreDisplay');
         const progressDisplay = document.getElementById('progressDisplay');
+        const progressBarFill = document.getElementById('progressBarFill');
         const questionLabel = document.getElementById('questionLabel');
         const questionWord = document.getElementById('questionWord');
         const questionHint = document.getElementById('questionHint');
@@ -769,6 +806,7 @@
         const wrongReviewBtn = document.getElementById('wrongReviewBtn');
         const viewLibBtn = document.getElementById('viewLibBtn');
         const resetBtn = document.getElementById('resetBtn');
+        const resetProgressBtn = document.getElementById('resetProgressBtn');
         const prevBtn = document.getElementById('prevBtn');
         const nextBtn = document.getElementById('nextBtn');
         const libraryPanel = document.getElementById('libraryPanel');
@@ -807,11 +845,12 @@
             return true;
         }
 
-        // ==================== 5. localStorage ====================
+        // ==================== 5. localStorage（含掌握进度） ====================
         function saveToStorage() {
             try {
                 localStorage.setItem('wordGame_words', JSON.stringify(allWords));
                 localStorage.setItem('wordGame_wrong', JSON.stringify(wrongWords));
+                localStorage.setItem('wordGame_mastered', JSON.stringify(masteredWords));
                 localStorage.setItem('wordGame_score', String(score));
                 localStorage.setItem('wordGame_voice', selectedVoiceName);
             } catch (e) {}
@@ -820,6 +859,7 @@
             try {
                 const sw = localStorage.getItem('wordGame_words');
                 const swrong = localStorage.getItem('wordGame_wrong');
+                const smastered = localStorage.getItem('wordGame_mastered');
                 const ss = localStorage.getItem('wordGame_score');
                 const sv = localStorage.getItem('wordGame_voice');
                 if (sw) {
@@ -832,6 +872,10 @@
                     const pw = JSON.parse(swrong);
                     if (Array.isArray(pw)) wrongWords = pw;
                 }
+                if (smastered) {
+                    const pm = JSON.parse(smastered);
+                    if (Array.isArray(pm)) masteredWords = pm;
+                }
                 if (ss) {
                     const s = parseInt(ss, 10);
                     if (!isNaN(s)) score = s;
@@ -840,69 +884,80 @@
             } catch (e) {
                 allWords = BUILTIN_WORDS.slice();
                 wrongWords = [];
+                masteredWords = [];
                 score = 0;
             }
             if (!allWords.length) allWords = BUILTIN_WORDS.slice();
+            // 清理：如果 mastered 里有已不存在的单词，删掉
+            const wordSet = new Set(allWords.map(w => w.word.toLowerCase()));
+            masteredWords = masteredWords.filter(w => wordSet.has(w));
         }
 
-        // ==================== 6. 语音引擎（关键改进） ====================
-        // 判断一个语音是否为英文
+        // ==================== 6. 掌握状态辅助函数 ====================
+        function isMastered(word) {
+            if (!word) return false;
+            return masteredWords.indexOf(word.toLowerCase()) !== -1;
+        }
+        function markMastered(word) {
+            if (!word) return;
+            const w = word.toLowerCase();
+            if (masteredWords.indexOf(w) === -1) {
+                masteredWords.push(w);
+                saveToStorage();
+            }
+        }
+        function unmarkMastered(word) {
+            if (!word) return;
+            const w = word.toLowerCase();
+            const i = masteredWords.indexOf(w);
+            if (i !== -1) {
+                masteredWords.splice(i, 1);
+                saveToStorage();
+            }
+        }
+
+        // ==================== 7. 语音引擎 ====================
         function isEnglishVoice(v) {
             if (!v || !v.lang) return false;
             return v.lang.toLowerCase().indexOf('en') === 0;
         }
-
-        // 给语音打分，越高越好（用于自动挑选最优音色）
         function scoreVoice(v) {
             if (!isEnglishVoice(v)) return -1;
             let s = 0;
             const name = (v.name || '').toLowerCase();
             const lang = (v.lang || '').toLowerCase();
-
-            // 优先美式/英式标准音
             if (lang.indexOf('en-us') === 0) s += 30;
             else if (lang.indexOf('en-gb') === 0) s += 25;
             else if (lang.indexOf('en') === 0) s += 10;
-
-            // 各种高质量音色名称加权
-            if (name.indexOf('google us english') !== -1) s += 100;   // 安卓 Chrome 最佳
+            if (name.indexOf('google us english') !== -1) s += 100;
             if (name.indexOf('google uk english') !== -1) s += 90;
-            if (name.indexOf('samantha') !== -1) s += 95;             // iOS 高质量
-            if (name.indexOf('aria') !== -1) s += 92;                 // 微软高质量女声
+            if (name.indexOf('samantha') !== -1) s += 95;
+            if (name.indexOf('aria') !== -1) s += 92;
             if (name.indexOf('jenny') !== -1) s += 90;
-            if (name.indexOf('guy') !== -1) s += 88;                  // 微软男声
-            if (name.indexOf('david') !== -1) s += 85;                // 微软男声
+            if (name.indexOf('guy') !== -1) s += 88;
+            if (name.indexOf('david') !== -1) s += 85;
             if (name.indexOf('mark') !== -1) s += 80;
             if (name.indexOf('zira') !== -1) s += 70;
-            if (name.indexOf('alex') !== -1) s += 88;                 // iOS 男声
-            if (name.indexOf('daniel') !== -1) s += 85;               // iOS 英式男声
+            if (name.indexOf('alex') !== -1) s += 88;
+            if (name.indexOf('daniel') !== -1) s += 85;
             if (name.indexOf('karen') !== -1) s += 80;
             if (name.indexOf('moira') !== -1) s += 78;
             if (name.indexOf('tessa') !== -1) s += 78;
             if (name.indexOf('microsoft') !== -1) s += 20;
-
-            // 排除一些音质差的
-            if (name.indexOf('compact') !== -1) s -= 30;              // 苹果精简版音质差
+            if (name.indexOf('compact') !== -1) s -= 30;
             if (name.indexOf('espeak') !== -1) s -= 50;
             if (name.indexOf('festival') !== -1) s -= 50;
-
             return s;
         }
-
-        // 加载可用语音
         function loadVoices() {
             if (!voiceSupported) return;
             const all = window.speechSynthesis.getVoices() || [];
-            // 只保留英文语音
             const enVoices = all.filter(isEnglishVoice);
-            // 按分数从高到低排序
             enVoices.sort((a, b) => scoreVoice(b) - scoreVoice(a));
             availableVoices = enVoices;
 
-            // 更新下拉框
             voiceSelect.innerHTML = '';
             if (enVoices.length === 0) {
-                // 没有英文语音，显示所有语音作为备选，并给出警告
                 voiceWarn.style.display = 'block';
                 const allVoices = all.slice();
                 allVoices.forEach(v => {
@@ -911,7 +966,6 @@
                     opt.textContent = `${v.name} (${v.lang})`;
                     voiceSelect.appendChild(opt);
                 });
-                // 尽量选一个默认
                 if (allVoices.length) {
                     if (selectedVoiceName && allVoices.some(v => v.name === selectedVoiceName)) {
                         voiceSelect.value = selectedVoiceName;
@@ -925,11 +979,9 @@
                 enVoices.forEach(v => {
                     const opt = document.createElement('option');
                     opt.value = v.name;
-                    // 显示更友好的名字
                     opt.textContent = `${v.name} (${v.lang})`;
                     voiceSelect.appendChild(opt);
                 });
-                // 恢复用户之前选的，或选最高分的
                 if (selectedVoiceName && enVoices.some(v => v.name === selectedVoiceName)) {
                     voiceSelect.value = selectedVoiceName;
                 } else {
@@ -937,46 +989,34 @@
                     voiceSelect.value = selectedVoiceName;
                 }
             }
-            // 保存用户选择
-            voiceSelect.addEventListener('change', function() {
+            voiceSelect.onchange = function() {
                 selectedVoiceName = this.value;
                 saveToStorage();
-                // 试听一下新音色
                 speakWord('hello');
-            });
+            };
         }
-
-        // 获取当前应该使用的语音对象
         function getSelectedVoiceObj() {
             if (!availableVoices.length) return null;
             const v = availableVoices.find(v => v.name === selectedVoiceName);
             return v || availableVoices[0];
         }
-
-        // 朗读
         function speakWord(text) {
             if (!text) return;
             if (!voiceSupported) return;
             if (!('speechSynthesis' in window)) return;
-
             try { window.speechSynthesis.cancel(); } catch (e) {}
-
             const u = new SpeechSynthesisUtterance(text);
             u.lang = 'en-US';
             u.rate = 0.95;
             u.pitch = 1;
             u.volume = 1;
-
-            // 应用用户选择的语音
             const voice = getSelectedVoiceObj();
             if (voice) {
                 u.voice = voice;
                 u.lang = voice.lang || 'en-US';
             }
-
             window.speechSynthesis.speak(u);
         }
-
         function handleSpeakClick() {
             if (!voiceSupported) {
                 feedbackMsg.textContent = '⚠️ 当前浏览器不支持语音，请换 Chrome 或 Safari';
@@ -991,13 +1031,30 @@
             if (currentQuestion) speakWord(currentQuestion.word);
         }
 
-        // ==================== 7. UI 更新 ====================
+        // ==================== 8. UI 更新（含真实进度条） ====================
         function updateScoreAndProgress() {
             scoreDisplay.textContent = score;
-            const total = isReviewingWrong ? wrongWords.length : allWords.length;
-            progressDisplay.textContent = `进度 ${questionCount}/${total}`;
+
+            // 计算掌握进度（始终基于全部单词，复习错题时也显示主进度）
+            const total = allWords.length;
+            const masteredCount = masteredWords.filter(w => {
+                return allWords.some(aw => aw.word.toLowerCase() === w);
+            }).length;
+
+            let label;
+            if (isReviewingWrong) {
+                label = `错题复习 · 已掌握 ${masteredCount}/${total}`;
+            } else {
+                label = `已掌握 ${masteredCount}/${total}`;
+            }
+            progressDisplay.textContent = label;
+
+            // 进度条
+            const percent = total > 0 ? (masteredCount / total) * 100 : 0;
+            progressBarFill.style.width = percent + '%';
         }
 
+        // ==================== 9. 题目渲染 ====================
         function renderQuestion() {
             if (!currentQuestion) return;
             if (autoNextTimer) { clearTimeout(autoNextTimer); autoNextTimer = null; }
@@ -1053,7 +1110,6 @@
             feedbackMsg.textContent = '请作答';
             feedbackMsg.className = 'feedback';
 
-            // 自动朗读（仅在支持且已解锁时）
             if (voiceSupported && voiceUnlocked) {
                 if (mode === 'en2zh') {
                     speakWord(wordObj.word);
@@ -1105,11 +1161,11 @@
                     if (btn.dataset.correct === '1') btn.classList.add('correct-highlight');
                 });
                 score++;
+                markMastered(correctWordObj.word);   // 标记掌握
                 feedbackMsg.textContent = `✅ 正确！ +1分 (${correctWordObj.word} = ${correctWordObj.meaning})`;
                 feedbackMsg.className = 'feedback correct';
                 if (voiceSupported && voiceUnlocked) speakWord(correctWordObj.word);
                 removeFromWrongBook(correctWordObj.word);
-                questionCount++;
                 updateScoreAndProgress();
                 saveToStorage();
                 if (autoNextTimer) clearTimeout(autoNextTimer);
@@ -1125,7 +1181,7 @@
             }
         }
 
-        // ==================== 8. 输入模式提交 ====================
+        // ==================== 10. 输入模式提交 ====================
         function handleSubmit() {
             if (answered) return;
             if (!currentQuestion) return;
@@ -1154,11 +1210,11 @@
                 answerInput.disabled = true;
                 submitBtn.disabled = true;
                 score++;
+                markMastered(correct.word);   // 标记掌握
                 feedbackMsg.textContent = `✅ 正确！ +1分 (${correct.word} = ${correct.meaning})`;
                 feedbackMsg.className = 'feedback correct';
                 if (voiceSupported && voiceUnlocked) speakWord(correct.word);
                 removeFromWrongBook(correct.word);
-                questionCount++;
                 updateScoreAndProgress();
                 saveToStorage();
                 if (autoNextTimer) clearTimeout(autoNextTimer);
@@ -1174,7 +1230,7 @@
             }
         }
 
-        // ==================== 9. 错题本 ====================
+        // ==================== 11. 错题本 ====================
         function addToWrongBook(wordObj) {
             const exists = wrongWords.some(w => w.word === wordObj.word);
             if (!exists) {
@@ -1187,18 +1243,35 @@
             if (i !== -1) { wrongWords.splice(i, 1); saveToStorage(); }
         }
 
-        // ==================== 10. 题目调度 ====================
+        // ==================== 12. 题目调度（关键：断点续学） ====================
         function nextQuestion() {
             if (autoNextTimer) { clearTimeout(autoNextTimer); autoNextTimer = null; }
 
-            let sourceWords = isReviewingWrong ? wrongWords : allWords;
-
-            if (isReviewingWrong && sourceWords.length === 0) {
-                isReviewingWrong = false;
-                wrongReviewBtn.textContent = '📕 复习错题';
-                sourceWords = allWords;
-                feedbackMsg.textContent = '🎉 错题本已空，已退出复习';
-                feedbackMsg.className = 'feedback correct';
+            let sourceWords;
+            if (isReviewingWrong) {
+                // 复习错题：从错题本取
+                sourceWords = wrongWords.slice();
+                if (sourceWords.length === 0) {
+                    isReviewingWrong = false;
+                    wrongReviewBtn.textContent = '📕 复习错题';
+                    feedbackMsg.textContent = '🎉 错题本已空，已退出复习';
+                    feedbackMsg.className = 'feedback correct';
+                    sourceWords = allWords.slice();
+                }
+            } else {
+                // 正常学习：只从"未掌握"的单词里抽
+                sourceWords = allWords.filter(w => !isMastered(w.word));
+                if (sourceWords.length === 0) {
+                    // 全部学完了！
+                    feedbackMsg.textContent = '🎉 恭喜！所有单词已掌握！可点击"重置学习进度"重新学习。';
+                    feedbackMsg.className = 'feedback correct';
+                    questionWord.textContent = '全部掌握 🎉';
+                    questionHint.textContent = '点击下方"重置学习进度"可以重新学一遍';
+                    inputArea.style.display = 'none';
+                    optionsArea.style.display = 'none';
+                    updateScoreAndProgress();
+                    return;
+                }
             }
 
             if (!sourceWords.length) {
@@ -1241,12 +1314,11 @@
             renderQuestion();
         }
 
-        // ==================== 11. 模式 / 复习 / 重置 ====================
+        // ==================== 13. 模式 / 复习 / 重置 ====================
         function toggleMode() {
             if (currentMode === 'zh2en') { currentMode = 'en2zh'; modeBtn.textContent = '🔁 英译中'; }
             else if (currentMode === 'en2zh') { currentMode = 'choice'; modeBtn.textContent = '🔁 选择题'; }
             else { currentMode = 'zh2en'; modeBtn.textContent = '🔁 中译英'; }
-            questionCount = 0;
             historyStack = [];
             nextQuestion();
         }
@@ -1260,35 +1332,45 @@
                 }
                 isReviewingWrong = true;
                 wrongReviewBtn.textContent = '📗 退出复习';
-                questionCount = 0;
                 historyStack = [];
-                feedbackMsg.textContent = '📕 复习错题模式';
+                feedbackMsg.textContent = '📕 复习错题模式（答对后加入已掌握）';
                 feedbackMsg.className = 'feedback';
             } else {
                 isReviewingWrong = false;
                 wrongReviewBtn.textContent = '📕 复习错题';
-                questionCount = 0;
                 historyStack = [];
-                feedbackMsg.textContent = '📚 返回全部单词';
+                feedbackMsg.textContent = '📚 返回全部单词（继续学习未掌握的）';
                 feedbackMsg.className = 'feedback';
             }
             nextQuestion();
         }
 
+        // 只重置分数
         function resetScore() {
-            if (confirm('确定要重置分数吗？错题本和词库不会清空。')) {
+            if (confirm('确定要重置分数吗？\n（学习进度和错题本不会清空）')) {
                 score = 0;
-                questionCount = 0;
-                historyStack = [];
                 saveToStorage();
                 updateScoreAndProgress();
-                feedbackMsg.textContent = '🔄 分数已重置';
+                feedbackMsg.textContent = '🔄 分数已重置（学习进度保留）';
                 feedbackMsg.className = 'feedback';
-                nextQuestion();
             }
         }
 
-        // ==================== 12. 词库管理 ====================
+        // 重置学习进度（清空 mastered）
+        function resetLearningProgress() {
+            if (!confirm('确定要重置学习进度吗？\n\n所有单词将重新变为"未掌握"，可以重新学一遍。\n错题本和分数保留。')) {
+                return;
+            }
+            masteredWords = [];
+            saveToStorage();
+            historyStack = [];
+            updateScoreAndProgress();
+            feedbackMsg.textContent = '♻️ 学习进度已重置，从头开始学';
+            feedbackMsg.className = 'feedback correct';
+            nextQuestion();
+        }
+
+        // ==================== 14. 词库管理 ====================
         function renderWordList() {
             if (!wordListContainer) return;
             if (allWords.length === 0) {
@@ -1298,9 +1380,10 @@
             let html = '';
             const sorted = [...allWords].sort((a, b) => a.word.localeCompare(b.word));
             sorted.forEach(item => {
+                const mastered = isMastered(item.word);
                 html += `
-                    <div class="word-item" data-word="${escapeHtml(item.word)}">
-                        <span class="en">${escapeHtml(item.word)}</span>
+                    <div class="word-item ${mastered ? 'mastered' : ''}" data-word="${escapeHtml(item.word)}">
+                        <span class="en">${escapeHtml(item.word)}${mastered ? '<span class="mastered-tag">✓</span>' : ''}</span>
                         <span class="zh">${escapeHtml(item.meaning)}</span>
                         <span class="speaker" title="朗读">🔊</span>
                     </div>
@@ -1354,11 +1437,12 @@
             newWordEn.value = '';
             newWordZh.value = '';
             renderWordList();
+            updateScoreAndProgress();
             feedbackMsg.textContent = `✅ 已新增单词：${en}`;
             feedbackMsg.className = 'feedback correct';
         }
 
-        // ==================== 13. 一键导入 ====================
+        // ==================== 15. 一键导入 ====================
         function parseImportText(text) {
             const lines = text.split(/\r?\n/);
             const result = [];
@@ -1394,6 +1478,7 @@
             });
             saveToStorage();
             renderWordList();
+            updateScoreAndProgress();
             importTextarea.value = '';
             feedbackMsg.textContent = `✅ 成功追加 ${added} 个单词（${newWords.length - added} 个已存在被跳过）`;
             feedbackMsg.className = 'feedback correct';
@@ -1404,11 +1489,11 @@
             if (!text.trim()) { alert('请粘贴要导入的单词'); return; }
             const newWords = parseImportText(text);
             if (newWords.length === 0) { alert('未解析到有效单词，请检查格式'); return; }
-            if (!confirm(`确定替换全部词库吗？\n将清空现有 ${allWords.length} 个单词，并清空错题本。\n新词库共 ${newWords.length} 个单词。`)) return;
+            if (!confirm(`确定替换全部词库吗？\n将清空现有 ${allWords.length} 个单词，并清空错题本和进度。\n新词库共 ${newWords.length} 个单词。`)) return;
             allWords = newWords;
             wrongWords = [];
+            masteredWords = [];
             score = 0;
-            questionCount = 0;
             historyStack = [];
             saveToStorage();
             renderWordList();
@@ -1419,7 +1504,7 @@
             nextQuestion();
         }
 
-        // ==================== 14. 语音解锁 ====================
+        // ==================== 16. 语音解锁 ====================
         function unlockVoice() {
             if (!voiceSupported) return;
             try {
@@ -1431,9 +1516,7 @@
             voiceUnlocked = true;
             voiceUnlockRow.style.display = 'none';
             voiceSelectRow.style.display = 'flex';
-            // 加载语音列表
             loadVoices();
-            // 播放一个测试音
             setTimeout(() => {
                 speakWord('hello');
                 feedbackMsg.textContent = '✅ 语音已开启，可在上方选择喜欢的音色';
@@ -1441,7 +1524,7 @@
             }, 200);
         }
 
-        // ==================== 15. 浏览器引导 ====================
+        // ==================== 17. 浏览器引导 ====================
         function showBrowserGuide() {
             let msg = '';
             if (isWeixin()) {
@@ -1459,7 +1542,7 @@
             browserAlert.classList.add('show');
         }
 
-        // ==================== 16. 初始化 ====================
+        // ==================== 18. 初始化 ====================
         function init() {
             loadFromStorage();
             updateScoreAndProgress();
@@ -1477,13 +1560,11 @@
                     }
                     speakWord('hello, this is a test');
                 });
-                // 尝试多次加载语音（有些浏览器异步返回）
                 if ('speechSynthesis' in window) {
                     loadVoices();
                     window.speechSynthesis.onvoiceschanged = function() {
                         loadVoices();
                     };
-                    // 延迟再试一次（保险）
                     setTimeout(loadVoices, 500);
                     setTimeout(loadVoices, 1500);
                 }
@@ -1495,7 +1576,6 @@
             ignoreAlertBtn.addEventListener('click', function() {
                 browserAlert.classList.remove('show');
             });
-
             openBrowserBtn.addEventListener('click', function() {
                 if (isWeixin()) {
                     alert('请点击右上角 "..." → "在浏览器打开"\n\n然后在浏览器地址栏粘贴本页地址即可。\n\n推荐使用 Chrome 或 Safari。');
@@ -1520,6 +1600,7 @@
             });
             closeLibBtn.addEventListener('click', hideLibrary);
             resetBtn.addEventListener('click', resetScore);
+            resetProgressBtn.addEventListener('click', resetLearningProgress);
             addWordBtn.addEventListener('click', addNewWord);
             importMergeBtn.addEventListener('click', importMerge);
             importReplaceBtn.addEventListener('click', importReplace);
