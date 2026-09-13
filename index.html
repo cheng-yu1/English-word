@@ -50,6 +50,41 @@
             font-weight: 600;
             color: #2c5f8a;
         }
+        /* 语音解锁条 */
+        .voice-unlock-bar {
+            text-align: center;
+            margin: 8px 0 4px;
+            padding: 10px;
+            background: #fff8e6;
+            border-radius: 16px;
+            border: 1px dashed #f3c96b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .voice-unlock-bar button {
+            background: #f5a623;
+            color: white;
+            border: none;
+            padding: 10px 22px;
+            border-radius: 30px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(245, 166, 35, 0.3);
+            transition: 0.1s;
+            min-height: 44px;
+        }
+        .voice-unlock-bar button:active {
+            background: #d98f16;
+            transform: scale(0.97);
+        }
+        .voice-unlock-bar .voice-tip {
+            font-size: 0.8rem;
+            color: #a57b1e;
+        }
         .subhead {
             color: #6a7e94;
             font-size: 0.9rem;
@@ -220,7 +255,7 @@
             transform: none;
         }
 
-        /* 导航按钮（上一题/下一题） */
+        /* 导航按钮 */
         .nav-row {
             display: flex;
             gap: 10px;
@@ -524,6 +559,13 @@
 <body>
 <div class="app">
     <h1>📘 单词练习 <span>零基础·阶段1</span></h1>
+
+    <!-- 语音解锁条：手机浏览器必须用户点击一次才能播报 -->
+    <div class="voice-unlock-bar" id="voiceUnlockBar">
+        <button id="voiceUnlockBtn">🔊 点击开启语音播报</button>
+        <span class="voice-tip">（手机必须点一次才能发音）</span>
+    </div>
+
     <div class="subhead">
         <div class="score-box"><i>🏆</i> 得分 <span id="scoreDisplay">0</span></div>
         <div class="progress-box" id="progressDisplay">进度 0/0</div>
@@ -802,13 +844,14 @@
         let allWords = [];
         let wrongWords = [];
         let score = 0;
-        let currentMode = 'zh2en';        // zh2en | en2zh | choice
+        let currentMode = 'zh2en';
         let currentQuestion = null;
         let isReviewingWrong = false;
         let questionCount = 0;
         let answered = false;
         let autoNextTimer = null;
-        let historyStack = [];             // 历史记录栈，用于上一题
+        let historyStack = [];
+        let voiceUnlocked = false;   // 语音是否已解锁（手机必需）
 
         // ==================== 3. DOM 元素引用 ====================
         const scoreDisplay = document.getElementById('scoreDisplay');
@@ -836,6 +879,8 @@
         const importTextarea = document.getElementById('importTextarea');
         const importMergeBtn = document.getElementById('importMergeBtn');
         const importReplaceBtn = document.getElementById('importReplaceBtn');
+        const voiceUnlockBar = document.getElementById('voiceUnlockBar');
+        const voiceUnlockBtn = document.getElementById('voiceUnlockBtn');
 
         // ==================== 4. localStorage ====================
         function saveToStorage() {
@@ -882,18 +927,49 @@
             if (!allWords.length) allWords = BUILTIN_WORDS.slice();
         }
 
-        // ==================== 5. 语音朗读（无延迟优化） ====================
+        // ==================== 5. 语音朗读（移动端优化） ====================
+        // 语音引擎准备
+        let voicesReady = false;
+        function initVoices() {
+            if (!('speechSynthesis' in window)) return;
+            // 预加载语音列表
+            window.speechSynthesis.getVoices();
+            if (window.speechSynthesis.onvoiceschanged !== undefined) {
+                window.speechSynthesis.onvoiceschanged = function() {
+                    voicesReady = true;
+                };
+            }
+        }
+
         function speakWord(text) {
             if (!text) return;
-            if (!('speechSynthesis' in window)) return;
-            // 立即取消当前播放，避免排队延迟
-            window.speechSynthesis.cancel();
+            if (!('speechSynthesis' in window)) {
+                console.warn('浏览器不支持语音合成');
+                return;
+            }
+            // 如果还没解锁，给出提示（但依然尝试播放，有些浏览器允许）
+            if (!voiceUnlocked) {
+                // 静默尝试，不提示
+            }
+            // 取消当前播放（手机端避免排队）
+            try {
+                window.speechSynthesis.cancel();
+            } catch (e) {}
+
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'en-US';
-            utterance.rate = 1.0;   // 稍快一点，减少延迟感
+            utterance.rate = 0.95;
             utterance.pitch = 1;
             utterance.volume = 1;
-            // 直接播放，不等待 voices 加载（大多数浏览器默认即可）
+
+            // 尝试选择英文语音（提升兼容性）
+            try {
+                const voices = window.speechSynthesis.getVoices();
+                const enVoice = voices.find(v => v.lang && v.lang.startsWith('en'));
+                if (enVoice) utterance.voice = enVoice;
+            } catch (e) {}
+
+            // 立即播放
             window.speechSynthesis.speak(utterance);
         }
 
@@ -911,7 +987,6 @@
             progressDisplay.textContent = `进度 ${questionCount}/${total}`;
         }
 
-        // 渲染题目
         function renderQuestion() {
             if (!currentQuestion) return;
             if (autoNextTimer) {
@@ -923,7 +998,6 @@
             const mode = currentQuestion.mode;
             const wordObj = currentQuestion;
 
-            // 输入框恢复
             answerInput.disabled = false;
             submitBtn.disabled = false;
             answerInput.value = '';
@@ -970,7 +1044,7 @@
             feedbackMsg.textContent = '请作答';
             feedbackMsg.className = 'feedback';
 
-            // 自动朗读英文（en2zh 和 choice 显示英文时）
+            // 自动朗读（英译中 / 选择题显示英文时）
             if (mode === 'en2zh') {
                 speakWord(wordObj.word);
             } else if (mode === 'choice') {
@@ -980,7 +1054,6 @@
             }
         }
 
-        // 生成选择题选项
         function generateOptions(correctWordObj, isZhToEn) {
             optionsArea.innerHTML = '';
             const pool = allWords.filter(w => w.word !== correctWordObj.word);
@@ -1010,15 +1083,12 @@
             });
         }
 
-        // 处理选择题
         function handleChoiceAnswer(btnElement, correctWordObj, isZhToEn) {
             if (answered) return;
-            // 如果不是正确答案，允许继续尝试直到答对
             const isCorrect = btnElement.dataset.correct === '1';
 
             if (isCorrect) {
                 answered = true;
-                // 高亮所有正确答案
                 const allOptions = optionsArea.querySelectorAll('.option-btn');
                 allOptions.forEach(btn => {
                     btn.style.pointerEvents = 'none';
@@ -1032,21 +1102,18 @@
                 questionCount++;
                 updateScoreAndProgress();
                 saveToStorage();
-                // 答对后自动跳转下一题
                 if (autoNextTimer) clearTimeout(autoNextTimer);
                 autoNextTimer = setTimeout(() => {
                     nextQuestion();
                 }, 1200);
             } else {
-                // 答错：高亮错误，记录错题，但不锁定选项（允许重试）
                 btnElement.classList.add('wrong-highlight');
-                btnElement.style.pointerEvents = 'none'; // 错误选项不再可点
+                btnElement.style.pointerEvents = 'none';
                 feedbackMsg.textContent = `❌ 再试试 (提示: ${correctWordObj.word} = ${correctWordObj.meaning})`;
                 feedbackMsg.className = 'feedback wrong';
                 speakWord(correctWordObj.word);
                 addToWrongBook(correctWordObj);
                 saveToStorage();
-                // 不跳转，等待用户继续点击正确选项
             }
         }
 
@@ -1086,13 +1153,11 @@
                 questionCount++;
                 updateScoreAndProgress();
                 saveToStorage();
-                // 自动跳转下一题
                 if (autoNextTimer) clearTimeout(autoNextTimer);
                 autoNextTimer = setTimeout(() => {
                     nextQuestion();
                 }, 1200);
             } else {
-                // 答错：不锁定，允许重试，记录错题
                 feedbackMsg.textContent = `❌ 再试试 (正确答案: ${correct.word} = ${correct.meaning})`;
                 feedbackMsg.className = 'feedback wrong';
                 speakWord(correct.word);
@@ -1100,7 +1165,6 @@
                 saveToStorage();
                 answerInput.value = '';
                 answerInput.focus();
-                // 不跳转
             }
         }
 
@@ -1151,10 +1215,8 @@
             const randomIndex = Math.floor(Math.random() * sourceWords.length);
             const wordObj = sourceWords[randomIndex];
 
-            // 将上一题压入历史（如果有）
             if (currentQuestion) {
                 historyStack.push(JSON.parse(JSON.stringify(currentQuestion)));
-                // 限制历史栈长度，防止内存过大
                 if (historyStack.length > 100) historyStack.shift();
             }
 
@@ -1168,7 +1230,6 @@
             renderQuestion();
         }
 
-        // 上一题
         function prevQuestion() {
             if (historyStack.length === 0) {
                 feedbackMsg.textContent = '📭 没有上一题了';
@@ -1289,7 +1350,6 @@
             libraryPanel.style.display = 'none';
         }
 
-        // 单条新增
         function addNewWord() {
             const en = newWordEn.value.trim();
             const zh = newWordZh.value.trim();
@@ -1312,31 +1372,26 @@
         }
 
         // ==================== 14. 一键导入 ====================
-        // 解析文本，支持逗号、制表符、中文逗号、空格分隔
         function parseImportText(text) {
             const lines = text.split(/\r?\n/);
             const result = [];
             for (let line of lines) {
                 line = line.trim();
                 if (!line) continue;
-                // 按逗号、制表符、中文逗号、空格分割，只取前两部分
-                // 优先匹配逗号或制表符
                 let parts = [];
                 if (/[,，\t]/.test(line)) {
                     parts = line.split(/[,，\t]+/).map(s => s.trim()).filter(Boolean);
                 } else {
-                    // 按第一个空格分割
                     const spaceIdx = line.indexOf(' ');
                     if (spaceIdx > 0) {
                         parts = [line.slice(0, spaceIdx).trim(), line.slice(spaceIdx + 1).trim()];
                     } else {
-                        // 没有分隔符，跳过
                         continue;
                     }
                 }
                 if (parts.length >= 2) {
                     const word = parts[0];
-                    const meaning = parts.slice(1).join(' '); // 防止释义中有空格
+                    const meaning = parts.slice(1).join(' ');
                     if (word && meaning) {
                         result.push({ word, meaning });
                     }
@@ -1345,7 +1400,6 @@
             return result;
         }
 
-        // 追加导入
         function importMerge() {
             const text = importTextarea.value;
             if (!text.trim()) {
@@ -1372,7 +1426,6 @@
             feedbackMsg.className = 'feedback correct';
         }
 
-        // 替换导入
         function importReplace() {
             const text = importTextarea.value;
             if (!text.trim()) {
@@ -1401,13 +1454,44 @@
             nextQuestion();
         }
 
-        // ==================== 15. 初始化 ====================
+        // ==================== 15. 语音解锁（关键：手机必需） ====================
+        function unlockVoice() {
+            if (!('speechSynthesis' in window)) {
+                alert('您的浏览器不支持语音播报，请更换 Chrome 或 Safari 试试');
+                return;
+            }
+            // 用一个空语音解锁权限（必须由用户点击触发）
+            try {
+                const u = new SpeechSynthesisUtterance('');
+                u.volume = 0;
+                u.rate = 1;
+                window.speechSynthesis.speak(u);
+            } catch (e) {}
+
+            voiceUnlocked = true;
+            voiceUnlockBar.style.display = 'none';
+
+            // 稍后播放一个测试音，确认能发音
+            setTimeout(() => {
+                speakWord('hello');
+                feedbackMsg.textContent = '✅ 语音已开启，点击英文单词即可朗读';
+                feedbackMsg.className = 'feedback correct';
+            }, 200);
+        }
+
+        // ==================== 16. 初始化 ====================
         function init() {
             loadFromStorage();
             updateScoreAndProgress();
 
+            // 预加载语音引擎
+            initVoices();
+
             modeBtn.textContent = '🔁 中译英';
             currentMode = 'zh2en';
+
+            // 语音解锁按钮
+            voiceUnlockBtn.addEventListener('click', unlockVoice);
 
             submitBtn.addEventListener('click', handleSubmit);
             answerInput.addEventListener('keydown', function(e) {
@@ -1434,9 +1518,7 @@
 
             prevBtn.addEventListener('click', prevQuestion);
             nextBtn.addEventListener('click', function() {
-                // 手动下一题：如果未答对，仍然继续下一题（但记录错题已由答错时完成）
                 if (!answered && currentQuestion) {
-                    // 如果还未答对，先记录错题
                     addToWrongBook(currentQuestion);
                     saveToStorage();
                 }
