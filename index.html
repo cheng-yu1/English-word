@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>英语单词学习 · 零基础阶段1</title>
     <style>
         * {
@@ -11,6 +14,10 @@
             box-sizing: border-box;
             font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
             -webkit-tap-highlight-color: transparent;
+        }
+        html {
+            -webkit-text-size-adjust: 100%;  /* 防止手机自动放大字体 */
+            text-size-adjust: 100%;
         }
         body {
             background: #f5f7fb;
@@ -62,12 +69,8 @@
             font-size: 0.92rem;
             line-height: 1.6;
         }
-        .browser-alert.show {
-            display: block;
-        }
-        .browser-alert strong {
-            color: #d35400;
-        }
+        .browser-alert.show { display: block; }
+        .browser-alert strong { color: #d35400; }
         .browser-alert .btn-row {
             margin-top: 10px;
             display: flex;
@@ -83,30 +86,29 @@
             cursor: pointer;
             min-height: 40px;
         }
-        .btn-open-browser {
-            background: #ff8c00;
-            color: white;
-        }
-        .btn-ignore {
-            background: #f0f0f0;
-            color: #555;
-        }
+        .btn-open-browser { background: #ff8c00; color: white; }
+        .btn-ignore { background: #f0f0f0; color: #555; }
 
-        /* 语音解锁条 */
-        .voice-unlock-bar {
-            text-align: center;
+        /* 语音设置区（解锁 + 选择） */
+        .voice-panel {
             margin: 8px 0 4px;
-            padding: 10px;
+            padding: 12px;
             background: #fff8e6;
             border-radius: 16px;
             border: 1px dashed #f3c96b;
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .voice-panel.show { display: flex; }
+        .voice-panel .unlock-row {
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 10px;
             flex-wrap: wrap;
         }
-        .voice-unlock-bar button {
+        .voice-panel .unlock-row button {
             background: #f5a623;
             color: white;
             border: none;
@@ -119,13 +121,60 @@
             transition: 0.1s;
             min-height: 44px;
         }
-        .voice-unlock-bar button:active {
+        .voice-panel .unlock-row button:active {
             background: #d98f16;
             transform: scale(0.97);
         }
-        .voice-unlock-bar .voice-tip {
+        .voice-panel .unlock-row .voice-tip {
             font-size: 0.8rem;
             color: #a57b1e;
+        }
+        .voice-panel .select-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .voice-panel .select-row label {
+            font-size: 0.85rem;
+            color: #6b5220;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .voice-panel .select-row select {
+            flex: 1;
+            min-width: 140px;
+            padding: 10px 12px;
+            border: 1.5px solid #e0c98c;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            background: white;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23997a3e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            background-size: 16px;
+            padding-right: 32px;
+        }
+        .voice-panel .select-row button {
+            background: #1e6bb8;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            min-height: 42px;
+        }
+        .voice-panel .select-row button:active { background: #155a9e; }
+        .voice-panel .voice-warn {
+            font-size: 0.78rem;
+            color: #a06000;
+            line-height: 1.4;
         }
 
         .subhead {
@@ -497,22 +546,29 @@
 <div class="app">
     <h1>📘 单词练习 <span>零基础·阶段1</span></h1>
 
-    <!-- 浏览器兼容提示卡（默认隐藏，检测到不支持时显示） -->
+    <!-- 浏览器兼容提示卡 -->
     <div class="browser-alert" id="browserAlert">
-        <div id="browserAlertText">
-            ⚠️ <strong>当前浏览器不支持语音播报</strong><br>
-            请使用 <strong>Chrome</strong> 或 <strong>Safari</strong> 打开本页面。
-        </div>
+        <div id="browserAlertText"></div>
         <div class="btn-row">
             <button class="btn-open-browser" id="openBrowserBtn">📱 如何用其他浏览器打开</button>
             <button class="btn-ignore" id="ignoreAlertBtn">继续使用（无语音）</button>
         </div>
     </div>
 
-    <!-- 语音解锁条（仅在支持语音时显示） -->
-    <div class="voice-unlock-bar" id="voiceUnlockBar" style="display:none;">
-        <button id="voiceUnlockBtn">🔊 点击开启语音播报</button>
-        <span class="voice-tip">（手机必须点一次才能发音）</span>
+    <!-- 语音设置面板（解锁 + 选择音色） -->
+    <div class="voice-panel" id="voicePanel">
+        <div class="unlock-row" id="voiceUnlockRow">
+            <button id="voiceUnlockBtn">🔊 点击开启语音播报</button>
+            <span class="voice-tip">（手机必须点一次才能发音）</span>
+        </div>
+        <div class="select-row" id="voiceSelectRow" style="display:none;">
+            <label for="voiceSelect">🎙️ 音色：</label>
+            <select id="voiceSelect"></select>
+            <button id="voiceTestBtn">试听</button>
+        </div>
+        <div class="voice-warn" id="voiceWarn" style="display:none;">
+            ⚠️ 系统未找到英文语音包，可能发音不准。请到「系统设置 → 语言与输入 → 文字转语音」中安装英文语音。
+        </div>
     </div>
 
     <div class="subhead">
@@ -693,8 +749,10 @@
         let answered = false;
         let autoNextTimer = null;
         let historyStack = [];
-        let voiceSupported = false;      // 浏览器是否支持语音合成
-        let voiceUnlocked = false;       // 用户是否已点击解锁
+        let voiceSupported = false;
+        let voiceUnlocked = false;
+        let availableVoices = [];      // 所有英文语音
+        let selectedVoiceName = '';    // 用户选择的语音名称
 
         // ==================== 3. DOM 引用 ====================
         const scoreDisplay = document.getElementById('scoreDisplay');
@@ -722,39 +780,30 @@
         const importTextarea = document.getElementById('importTextarea');
         const importMergeBtn = document.getElementById('importMergeBtn');
         const importReplaceBtn = document.getElementById('importReplaceBtn');
-        const voiceUnlockBar = document.getElementById('voiceUnlockBar');
+        const voicePanel = document.getElementById('voicePanel');
+        const voiceUnlockRow = document.getElementById('voiceUnlockRow');
         const voiceUnlockBtn = document.getElementById('voiceUnlockBtn');
+        const voiceSelectRow = document.getElementById('voiceSelectRow');
+        const voiceSelect = document.getElementById('voiceSelect');
+        const voiceTestBtn = document.getElementById('voiceTestBtn');
+        const voiceWarn = document.getElementById('voiceWarn');
         const browserAlert = document.getElementById('browserAlert');
         const browserAlertText = document.getElementById('browserAlertText');
         const openBrowserBtn = document.getElementById('openBrowserBtn');
         const ignoreAlertBtn = document.getElementById('ignoreAlertBtn');
 
         // ==================== 4. 环境检测 ====================
-        // 检测是否在微信内
         function isWeixin() {
-            const ua = navigator.userAgent.toLowerCase();
-            return ua.indexOf('micromessenger') !== -1;
+            return navigator.userAgent.toLowerCase().indexOf('micromessenger') !== -1;
         }
-        // 检测是否在夸克/UC 等
         function isQuarkOrUC() {
             const ua = navigator.userAgent.toLowerCase();
             return ua.indexOf('quark') !== -1 || ua.indexOf('ucbrowser') !== -1 || ua.indexOf('uc/') !== -1;
         }
-        // 检测语音合成是否真的可用（有些浏览器对象存在但不发声）
         function detectVoiceSupport() {
-            // 基础检测
-            if (!('speechSynthesis' in window)) {
-                return false;
-            }
-            if (typeof window.SpeechSynthesisUtterance !== 'function') {
-                return false;
-            }
-            // 微信和夸克大多数情况不可用
-            if (isWeixin() || isQuarkOrUC()) {
-                // 微信内置浏览器在某些安卓机上其实可用，但大多数不行
-                // 为了体验，保守处理：微信/夸克都提示
-                return false;
-            }
+            if (!('speechSynthesis' in window)) return false;
+            if (typeof window.SpeechSynthesisUtterance !== 'function') return false;
+            if (isWeixin() || isQuarkOrUC()) return false;
             return true;
         }
 
@@ -764,6 +813,7 @@
                 localStorage.setItem('wordGame_words', JSON.stringify(allWords));
                 localStorage.setItem('wordGame_wrong', JSON.stringify(wrongWords));
                 localStorage.setItem('wordGame_score', String(score));
+                localStorage.setItem('wordGame_voice', selectedVoiceName);
             } catch (e) {}
         }
         function loadFromStorage() {
@@ -771,6 +821,7 @@
                 const sw = localStorage.getItem('wordGame_words');
                 const swrong = localStorage.getItem('wordGame_wrong');
                 const ss = localStorage.getItem('wordGame_score');
+                const sv = localStorage.getItem('wordGame_voice');
                 if (sw) {
                     const p = JSON.parse(sw);
                     allWords = (Array.isArray(p) && p.length) ? p : BUILTIN_WORDS.slice();
@@ -785,6 +836,7 @@
                     const s = parseInt(ss, 10);
                     if (!isNaN(s)) score = s;
                 }
+                if (sv) selectedVoiceName = sv;
             } catch (e) {
                 allWords = BUILTIN_WORDS.slice();
                 wrongWords = [];
@@ -793,13 +845,118 @@
             if (!allWords.length) allWords = BUILTIN_WORDS.slice();
         }
 
-        // ==================== 6. 语音朗读 ====================
+        // ==================== 6. 语音引擎（关键改进） ====================
+        // 判断一个语音是否为英文
+        function isEnglishVoice(v) {
+            if (!v || !v.lang) return false;
+            return v.lang.toLowerCase().indexOf('en') === 0;
+        }
+
+        // 给语音打分，越高越好（用于自动挑选最优音色）
+        function scoreVoice(v) {
+            if (!isEnglishVoice(v)) return -1;
+            let s = 0;
+            const name = (v.name || '').toLowerCase();
+            const lang = (v.lang || '').toLowerCase();
+
+            // 优先美式/英式标准音
+            if (lang.indexOf('en-us') === 0) s += 30;
+            else if (lang.indexOf('en-gb') === 0) s += 25;
+            else if (lang.indexOf('en') === 0) s += 10;
+
+            // 各种高质量音色名称加权
+            if (name.indexOf('google us english') !== -1) s += 100;   // 安卓 Chrome 最佳
+            if (name.indexOf('google uk english') !== -1) s += 90;
+            if (name.indexOf('samantha') !== -1) s += 95;             // iOS 高质量
+            if (name.indexOf('aria') !== -1) s += 92;                 // 微软高质量女声
+            if (name.indexOf('jenny') !== -1) s += 90;
+            if (name.indexOf('guy') !== -1) s += 88;                  // 微软男声
+            if (name.indexOf('david') !== -1) s += 85;                // 微软男声
+            if (name.indexOf('mark') !== -1) s += 80;
+            if (name.indexOf('zira') !== -1) s += 70;
+            if (name.indexOf('alex') !== -1) s += 88;                 // iOS 男声
+            if (name.indexOf('daniel') !== -1) s += 85;               // iOS 英式男声
+            if (name.indexOf('karen') !== -1) s += 80;
+            if (name.indexOf('moira') !== -1) s += 78;
+            if (name.indexOf('tessa') !== -1) s += 78;
+            if (name.indexOf('microsoft') !== -1) s += 20;
+
+            // 排除一些音质差的
+            if (name.indexOf('compact') !== -1) s -= 30;              // 苹果精简版音质差
+            if (name.indexOf('espeak') !== -1) s -= 50;
+            if (name.indexOf('festival') !== -1) s -= 50;
+
+            return s;
+        }
+
+        // 加载可用语音
+        function loadVoices() {
+            if (!voiceSupported) return;
+            const all = window.speechSynthesis.getVoices() || [];
+            // 只保留英文语音
+            const enVoices = all.filter(isEnglishVoice);
+            // 按分数从高到低排序
+            enVoices.sort((a, b) => scoreVoice(b) - scoreVoice(a));
+            availableVoices = enVoices;
+
+            // 更新下拉框
+            voiceSelect.innerHTML = '';
+            if (enVoices.length === 0) {
+                // 没有英文语音，显示所有语音作为备选，并给出警告
+                voiceWarn.style.display = 'block';
+                const allVoices = all.slice();
+                allVoices.forEach(v => {
+                    const opt = document.createElement('option');
+                    opt.value = v.name;
+                    opt.textContent = `${v.name} (${v.lang})`;
+                    voiceSelect.appendChild(opt);
+                });
+                // 尽量选一个默认
+                if (allVoices.length) {
+                    if (selectedVoiceName && allVoices.some(v => v.name === selectedVoiceName)) {
+                        voiceSelect.value = selectedVoiceName;
+                    } else {
+                        selectedVoiceName = allVoices[0].name;
+                        voiceSelect.value = selectedVoiceName;
+                    }
+                }
+            } else {
+                voiceWarn.style.display = 'none';
+                enVoices.forEach(v => {
+                    const opt = document.createElement('option');
+                    opt.value = v.name;
+                    // 显示更友好的名字
+                    opt.textContent = `${v.name} (${v.lang})`;
+                    voiceSelect.appendChild(opt);
+                });
+                // 恢复用户之前选的，或选最高分的
+                if (selectedVoiceName && enVoices.some(v => v.name === selectedVoiceName)) {
+                    voiceSelect.value = selectedVoiceName;
+                } else {
+                    selectedVoiceName = enVoices[0].name;
+                    voiceSelect.value = selectedVoiceName;
+                }
+            }
+            // 保存用户选择
+            voiceSelect.addEventListener('change', function() {
+                selectedVoiceName = this.value;
+                saveToStorage();
+                // 试听一下新音色
+                speakWord('hello');
+            });
+        }
+
+        // 获取当前应该使用的语音对象
+        function getSelectedVoiceObj() {
+            if (!availableVoices.length) return null;
+            const v = availableVoices.find(v => v.name === selectedVoiceName);
+            return v || availableVoices[0];
+        }
+
+        // 朗读
         function speakWord(text) {
             if (!text) return;
-            if (!voiceSupported) {
-                // 不支持就静默返回（已经在页面上提示过用户）
-                return;
-            }
+            if (!voiceSupported) return;
             if (!('speechSynthesis' in window)) return;
 
             try { window.speechSynthesis.cancel(); } catch (e) {}
@@ -810,12 +967,12 @@
             u.pitch = 1;
             u.volume = 1;
 
-            // 尝试选择英文语音
-            try {
-                const voices = window.speechSynthesis.getVoices();
-                const enVoice = voices.find(v => v.lang && v.lang.startsWith('en'));
-                if (enVoice) u.voice = enVoice;
-            } catch (e) {}
+            // 应用用户选择的语音
+            const voice = getSelectedVoiceObj();
+            if (voice) {
+                u.voice = voice;
+                u.lang = voice.lang || 'en-US';
+            }
 
             window.speechSynthesis.speak(u);
         }
@@ -1272,17 +1429,21 @@
                 window.speechSynthesis.speak(u);
             } catch (e) {}
             voiceUnlocked = true;
-            voiceUnlockBar.style.display = 'none';
+            voiceUnlockRow.style.display = 'none';
+            voiceSelectRow.style.display = 'flex';
+            // 加载语音列表
+            loadVoices();
+            // 播放一个测试音
             setTimeout(() => {
                 speakWord('hello');
-                feedbackMsg.textContent = '✅ 语音已开启，点击英文单词即可朗读';
+                feedbackMsg.textContent = '✅ 语音已开启，可在上方选择喜欢的音色';
                 feedbackMsg.className = 'feedback correct';
             }, 200);
         }
 
         // ==================== 15. 浏览器引导 ====================
         function showBrowserGuide() {
-            let msg = '请使用手机自带浏览器、Chrome 或 Safari 打开本页面。';
+            let msg = '';
             if (isWeixin()) {
                 msg = '📱 <strong>微信内无法语音播报</strong><br>' +
                       '请点击右上角 <strong>"..."</strong> → <strong>"在浏览器打开"</strong>，' +
@@ -1303,29 +1464,34 @@
             loadFromStorage();
             updateScoreAndProgress();
 
-            // 检测语音支持
             voiceSupported = detectVoiceSupport();
 
             if (voiceSupported) {
-                // 支持语音：显示解锁条
-                voiceUnlockBar.style.display = 'flex';
+                voicePanel.classList.add('show');
                 voiceUnlockBtn.addEventListener('click', unlockVoice);
-                // 预热语音列表
-                if ('speechSynthesis' in window) {
-                    window.speechSynthesis.getVoices();
-                    if (window.speechSynthesis.onvoiceschanged !== undefined) {
-                        window.speechSynthesis.onvoiceschanged = function() {
-                            window.speechSynthesis.getVoices();
-                        };
+                voiceTestBtn.addEventListener('click', function() {
+                    if (!voiceUnlocked) {
+                        feedbackMsg.textContent = '💡 请先点击"开启语音播报"';
+                        feedbackMsg.className = 'feedback';
+                        return;
                     }
+                    speakWord('hello, this is a test');
+                });
+                // 尝试多次加载语音（有些浏览器异步返回）
+                if ('speechSynthesis' in window) {
+                    loadVoices();
+                    window.speechSynthesis.onvoiceschanged = function() {
+                        loadVoices();
+                    };
+                    // 延迟再试一次（保险）
+                    setTimeout(loadVoices, 500);
+                    setTimeout(loadVoices, 1500);
                 }
             } else {
-                // 不支持语音：显示浏览器引导
-                voiceUnlockBar.style.display = 'none';
+                voicePanel.style.display = 'none';
                 showBrowserGuide();
             }
 
-            // 关闭浏览器提示
             ignoreAlertBtn.addEventListener('click', function() {
                 browserAlert.classList.remove('show');
             });
